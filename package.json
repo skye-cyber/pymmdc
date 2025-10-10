@@ -1,0 +1,32 @@
+{
+    "name": "pymmdc",
+    "version": "1.0",
+    "private": true,
+    "description": "Mermaid to png converter",
+    "scripts": {},
+    "browserslist": {
+        "production": [
+            ">0.2%",
+            "not dead",
+            "not op_mini all"
+        ],
+        "development": [
+            "last 1 chrome version",
+            "last 1 firefox version",
+            "last 1 safari version"
+        ]
+    },
+    "keywords": [],
+    "bugs": {
+        "url": "https://github.com/skye-cyber/pymmdc/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/skye-cyber/pymmdc.git"
+    },
+    "license": "GPL",
+    "author": "skye",
+    "dependencies": {
+        "@mermaid-js/mermaid-cli": "^11.12.0"
+    }
+}
