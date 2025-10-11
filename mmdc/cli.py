@@ -38,7 +38,12 @@ def main():
         choices=["default", "forest", "dark", "neutral"],
         help="Diagram theme",
     )
-
+    parser.add_argument(
+        "-bg",
+        "--background",
+        default="transparent",
+        help="Diagram theme",
+    )
     # Markdown processing options
     parser.add_argument(
         "--process-markdown",
@@ -65,7 +70,10 @@ def main():
         # Create enhanced converter
         converter = EnhancedMermaidConverter(timeout=args.timeout)
         converter.base_converter.set_config(
-            width=args.width, height=args.height, theme=args.theme
+            width=args.width,
+            height=args.height,
+            theme=args.theme,
+            backgroundColor=args.background,
         )
         # Handle batch processing
         if args.batch:
