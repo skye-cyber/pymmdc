@@ -9,7 +9,7 @@ Usage:
 
 import argparse
 from pathlib import Path
-from .core.converter import EnhancedMermaidConverter
+from .core.cliconverter import EnhancedMermaidConverter
 
 
 # Update the main CLI to support Markdown processing
@@ -28,7 +28,7 @@ def main():
 
     # Mermaid conversion options
     parser.add_argument(
-        "--timeout", type=int, default=60, help="Conversion timeout in seconds"
+        "--timeout", type=int, default=300, help="Conversion timeout in seconds"
     )
     parser.add_argument("--width", type=int, default=6400, help="Diagram width")
     parser.add_argument("--height", type=int, default=3200, help="Diagram height")
@@ -69,12 +69,14 @@ def main():
     try:
         # Create enhanced converter
         converter = EnhancedMermaidConverter(timeout=args.timeout)
-        converter.base_converter.set_config(
-            width=args.width,
-            height=args.height,
-            theme=args.theme,
-            backgroundColor=args.background,
-        )
+        config = {
+            "width": args.width,
+            "height": args.height,
+            "theme": args.theme,
+            "background-color": args.background
+        }
+        converter.base_converter.set_config(**config)
+
         # Handle batch processing
         if args.batch:
             import glob

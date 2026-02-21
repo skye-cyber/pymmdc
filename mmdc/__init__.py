@@ -8,15 +8,15 @@ __version__ = "0.1.0"
 __author__ = "PyMMDC Team"
 __description__ = "Pure Python Mermaid Diagram Converter with robust error handling"
 
-from .core.converter import LocalMermaidConverter, EnhancedMermaidConverter
-from .processors.markdown import MarkdownMermaidProcessor
+from . import core
+from . import processors
 from .core.exceptions import ConversionError, MermaidCLIError, ConfigurationError
+
 from .cli import main
 
 __all__ = [
-    "LocalMermaidConverter",
-    "EnhancedMermaidConverter",
-    "MarkdownMermaidProcessor",
+    "core",
+    "processors",
     "ConversionError",
     "MermaidCLIError",
     "ConfigurationError",

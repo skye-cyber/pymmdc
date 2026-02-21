@@ -1,0 +1,6 @@
+class ConfigurationError(Exception):
+    ...
+
+
+class ConversionError(Exception):
+    ...

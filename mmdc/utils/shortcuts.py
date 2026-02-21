@@ -1,4 +1,4 @@
-from ..core.converter import LocalMermaidConverter
+from ..core.pyconverter import LocalMermaidConverter
 from ..utils.simple import logger
 from ..core.types import ConversionStatus
 

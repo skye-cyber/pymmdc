@@ -1,8 +1,7 @@
-import tempfile
-import subprocess
 from pathlib import Path
-from .exceptions import MermaidCLIError, ConfigurationError, ConversionError
 from typing import Optional, Dict, Any, List
+from mermaid import Mermaid
+from ..core.exceptions import ConversionError, ConfigurationError
 from ..utils.simple import logger
 from ..utils.file_utils import TemporaryFileManager
 from ..core.validator import SystemValidator, MermaidCodeValidator
@@ -12,15 +11,15 @@ from ..processors.markdown import MarkdownMermaidProcessor
 
 class LocalMermaidConverter:
     """
-    Converts Mermaid diagrams to PNG using local Mermaid CLI only.
-    No web requests - purely local operation.
+    Converts Mermaid diagrams to PNG using mermaid-python package.
+    No subprocess calls - purely Python implementation.
     """
 
-    # MMDC configuration defaults
+    # Configuration defaults
     DEFAULT_CONFIG = {
         "width": 1200,
         "height": 800,
-        "backgroundColor": "transparent",
+        "background-color": "transparent",
         "theme": "default",
     }
 
@@ -28,17 +27,16 @@ class LocalMermaidConverter:
 
     def __init__(
         self,
-        mmdc_path: str = "mmdc",
-        timeout: int = 60,
+        timeout: int = 120,
         temp_dir: Optional[str] = None,
         validate_system: bool = True,
     ):
-        self.mmdc_path = mmdc_path
         self.timeout = timeout
         self.temp_manager = TemporaryFileManager()
         self.validator = SystemValidator()
         self.code_validator = MermaidCodeValidator()
         self.config = self.DEFAULT_CONFIG.copy()
+        self.mermaid = Mermaid()
 
         # System validation
         if validate_system:
@@ -47,30 +45,20 @@ class LocalMermaidConverter:
         logger.info("LocalMermaidConverter initialized successfully")
 
     def _validate_environment(self):
-        """Validate that all required dependencies are available."""
         logger.info("Validating system environment...")
 
-        # Check Node.js
-        node_ok, node_msg = self.validator.validate_node_js()
-        if not node_ok:
-            raise ConfigurationError(f"Node.js validation failed: {node_msg}")
-        logger.info(node_msg)
-
-        # Check Mermaid CLI
-        mmdc_ok, mmdc_msg = self.validator.validate_mermaid_cli()
-        if not mmdc_ok:
-            raise ConfigurationError(f"Mermaid CLI validation failed: {mmdc_msg}")
-        logger.info(mmdc_msg)
-
-        # Check file permissions
-        test_dir = Path(tempfile.gettempdir())
-        perm_ok, perm_msg = self.validator.validate_file_permissions(test_dir)
-        if not perm_ok:
-            raise ConfigurationError(f"File permission check failed: {perm_msg}")
-        logger.info(perm_msg)
+        # Check Python environment
+        try:
+            # Test basic functionality
+            test_diagram = "graph TD; A-->B"
+            self.mermaid.add_flowchart("test", test_diagram)
+            self.mermaid.generate("test.png")
+            Path("test.png").unlink()  # Clean up
+        except Exception as e:
+            raise ConfigurationError(f"Mermaid Python validation failed: {str(e)}")
 
     def set_config(self, **kwargs):
-        """Update MMDC configuration parameters."""
+        """Update configuration parameters."""
         valid_keys = set(self.DEFAULT_CONFIG.keys())
         for key, value in kwargs.items():
             if key in valid_keys:
@@ -95,7 +83,6 @@ class LocalMermaidConverter:
 
         Raises:
             ConversionError: If conversion fails
-            MermaidCLIError: If Mermaid CLI execution fails
         """
         logger.info("Starting Mermaid to PNG conversion...")
 
@@ -108,26 +95,21 @@ class LocalMermaidConverter:
             # Sanitize input
             sanitized_code = self.code_validator.sanitize_input(mermaid_code)
 
-            # Create temporary files
-            input_file = self.temp_manager.create_temp_file(".mmd", sanitized_code)
+            # Create temporary file for output
             output_file = self.temp_manager.create_temp_file(".png")
 
-            # Build MMDC command
-            cmd = self._build_mmdc_command(input_file, output_file)
-
-            logger.debug(f"Executing command: {' '.join(cmd)}")
-
-            # Execute conversion
-            result = self._execute_mmdc(cmd)
+            # Generate diagram
+            self.mermaid.add_flowchart("diagram", sanitized_code)
+            self.mermaid.generate(output_file.name)
 
             # Read output file
             if not output_file.exists():
-                raise MermaidCLIError("Output file was not created")
+                raise ConversionError("Output file was not created")
 
             png_data = output_file.read_bytes()
 
             if len(png_data) == 0:
-                raise MermaidCLIError("Output file is empty")
+                raise ConversionError("Output file is empty")
 
             logger.info(
                 f"Successfully converted Mermaid diagram to PNG ({len(png_data)} bytes)"
@@ -136,7 +118,7 @@ class LocalMermaidConverter:
 
         except Exception as e:
             logger.error(f"Conversion failed: {str(e)}")
-            raise
+            raise ConversionError(str(e)) from e
 
     def convert_and_save(self, mermaid_code: str, output_path: str) -> ConversionResult:
         """
@@ -188,56 +170,6 @@ class LocalMermaidConverter:
                 execution_time=execution_time,
             )
 
-    def _build_mmdc_command(self, input_file: Path, output_file: Path) -> list:
-        """Build the MMDC command line arguments."""
-        cmd = [
-            self.mmdc_path,
-            "--input",
-            str(input_file),
-            "--output",
-            str(output_file),
-            "--width",
-            str(self.config["width"]),
-            "--height",
-            str(self.config["height"]),
-            "--backgroundColor",
-            self.config["backgroundColor"],
-            "--theme",
-            self.config["theme"],
-            "--quiet",  # Reduce verbose output
-        ]
-
-        return cmd
-
-    def _execute_mmdc(self, cmd: list) -> subprocess.CompletedProcess:
-        """Execute MMDC command with robust error handling."""
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=self.timeout, check=True
-            )
-
-            if result.stderr:
-                logger.warning(f"MMDC stderr: {result.stderr.strip()}")
-
-            return result
-
-        except subprocess.TimeoutExpired as e:
-            error_msg = f"MMDC execution timed out after {self.timeout} seconds"
-            logger.error(error_msg)
-            raise MermaidCLIError(error_msg) from e
-
-        except subprocess.CalledProcessError as e:
-            error_msg = f"MMDC execution failed with return code {e.returncode}"
-            if e.stderr:
-                error_msg += f": {e.stderr.strip()}"
-            logger.error(error_msg)
-            raise MermaidCLIError(error_msg) from e
-
-        except FileNotFoundError as e:
-            error_msg = f"MMDC executable not found at '{self.mmdc_path}'"
-            logger.error(error_msg)
-            raise ConfigurationError(error_msg) from e
-
     def batch_convert(
         self, mermaid_files: Dict[str, str]
     ) -> Dict[str, ConversionResult]:
@@ -264,9 +196,7 @@ class LocalMermaidConverter:
         success_count = sum(
             1 for r in results.values() if r.status == ConversionStatus.SUCCESS
         )
-        logger.info(
-            f"Batch conversion completed: {success_count}/{len(results)} successful"
-        )
+        logger.info(f"Batch conversion completed: {success_count}/{len(results)} successful")
 
         return results
 
@@ -280,7 +210,6 @@ class LocalMermaidConverter:
 
     def cleanup(self):
         """Clean up temporary resources."""
-        self.temp_manager.cleanup()
         logger.info("Temporary resources cleaned up")
 
 
@@ -317,7 +246,6 @@ class EnhancedMermaidConverter:
         # Determine processing mode
         if input_path.suffix.lower() == ".md" or process_markdown:
             return self.markdown_processor.process_markdown_file(
-                input_file,
                 output_dir=kwargs.get("output_dir"),
                 replace_blocks=kwargs.get("replace_blocks", False),
             )
@@ -334,14 +262,11 @@ class EnhancedMermaidConverter:
             return {
                 "file": input_file,
                 "output_file": output_file,
-                "success": result.status.value == "success",
-                "error": result.error_message,
                 "file_size": result.file_size,
                 "execution_time": result.execution_time,
             }
 
     def batch_convert(self, files: List[str], **kwargs) -> Dict[str, Any]:
-        """Convert multiple files with automatic type detection."""
         results = {}
 
         for file_path in files:
